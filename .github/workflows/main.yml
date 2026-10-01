@@ -1,0 +1,42 @@
+name: Compress PDF
+
+on:
+  push:
+    paths:
+      - 'input/*.pdf'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  compress:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Ghostscript
+        run: sudo apt-get update && sudo apt-get install -y ghostscript
+
+      - name: Compress PDFs
+        run: |
+          mkdir -p input compressed
+          for f in input/*.pdf; do
+            [ -e "$f" ] || continue
+            out="compressed/$(basename "$f")"
+            gs -sDEVICE=pdfwrite -dCompatibilityLevel=1.4 -dPDFSETTINGS=/screen \
+               -dNOPAUSE -dQUIET -dBATCH -sOutputFile="$out" "$f"
+            echo "$f: $(du -h "$f" | cut -f1) -> $(du -h "$out" | cut -f1)"
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: compressed-pdfs
+          path: compressed/
+
+      - name: Save results to repo
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add compressed
+          git diff --cached --quiet || (git commit -m "Compressed PDFs" && git push)
